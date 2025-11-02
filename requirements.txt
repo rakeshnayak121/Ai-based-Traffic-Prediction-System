@@ -1,21 +1,9 @@
 streamlit==1.39.0
-
-# compatible dependencies
-rich==13.9.4
 opencv-python-headless==4.10.0.84
-norfair==1.0.1
-ultralytics==8.3.40
-torch==2.3.1
-torchvision==0.18.1
-
-# utils & data
 numpy==1.26.4
-pandas==2.2.2
-scipy==1.16.3
+pandas==2.2.3
 matplotlib==3.9.2
-seaborn==0.13.2
-pillow==10.4.0
-requests==2.32.3
-tqdm==4.67.1
-pyyaml==6.0.3
-protobuf==5.29.0
+Pillow==10.4.0
+torch==2.4.1
+torchvision==0.19.1
+ultralytics==8.3.40
