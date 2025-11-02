@@ -18,6 +18,11 @@ emergency_labels = ['Police Car', 'Police Van', 'Fire Truck', 'Ambulance']
 non_emergency_labels = ['car', 'bus', 'truck', 'motorcycle']
 
 st.title("ADVANCED TRAFFIC FLOW OPTIMIZATION FOR INTELLIGENT TRAFFIC SYSTEM - Emergency Vehicle Detection")
+st.info(
+    "👉 **Upload an image or video of any emergency vehicle to get the detection results.**\n\n"
+    "Supported formats: MP4, MOV, AVI, MKV, JPEG, PNG | Max 200 MB per file"
+)
+
 
 # File uploader for multiple videos
 uploaded_files = st.file_uploader(
@@ -128,5 +133,6 @@ if uploaded_files:
         st.write(f"Estimated Road Clearance Time: {clearance_time} seconds")
 
     st.write(f"### Total Road Clearance Time for All Videos: {total_clearance_time} seconds")
+
 
 
