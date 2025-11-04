@@ -11,15 +11,14 @@ st.set_page_config(page_title="AI Traffic Flow Optimization", layout="wide")
 st.title("🚦 Advanced Traffic Flow Optimization - Emergency Vehicle Detection")
 
 @st.cache_resource
-def load_models():
+def load_models(yolov8_path="best_emergency_vehicle_model.pt"):
     try:
-        yv8_emergency = YOLO("models/best_emergency_vehicle_model.pt")
-        yv5_non_emergency = YOLO("models/yolov5s.pt")  # local copy
-        return yv8_emergency, yv5_non_emergency
+        yv8 = YOLO(yolov8_path)
+        yv5 = torch.hub.load("ultralytics/yolov5", "yolov5s", trust_repo=True)
+        return yv8, yv5
     except Exception as e:
         st.error(f"Model load error: {e}")
         st.stop()
-
 
 yolo_v8_emergency, yolo_v5_non_emergency = load_models()
 
@@ -137,4 +136,3 @@ if uploaded_files:
     st.subheader(f"Total Estimated Road Clearance Time: {total_clearance_time} seconds")
 else:
     st.info("Please upload at least one video file.")
-
