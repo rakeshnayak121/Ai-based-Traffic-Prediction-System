@@ -1,0 +1,6 @@
+
+train: /content/drive/MyDrive/EMERGENCY/train/images
+val: /content/drive/MyDrive/EMERGENCY/val/images
+
+nc: 4  # Number of classes
+names: ['Police Car', 'Police Van',  'Fire Truck', 'Ambulance']
