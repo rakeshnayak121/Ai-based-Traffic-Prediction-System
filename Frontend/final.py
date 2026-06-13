@@ -1,116 +1,210 @@
+
 import cv2
-import torch
 import tempfile
-from ultralytics import YOLO
-import streamlit as st
-from norfair import Detection, Tracker
 import numpy as np
 import pandas as pd
+import streamlit as st
 
-# Load the YOLOv5 model for non-emergency vehicles
-yolo_v5_non_emergency = torch.hub.load('ultralytics/yolov5', 'yolov5s')  # Pre-trained YOLOv5 model
+from ultralytics import YOLO
+from norfair import Detection, Tracker
 
-# Define labels for non-emergency vehicles
-non_emergency_labels = ['car', 'bus', 'truck', 'motorcycle']
+# ---------------------------------------------------
+# PAGE CONFIG
+# ---------------------------------------------------
 
-st.title("Advanced Traffic Flow Optimization for Intelligent Traffic System")
-
-# File uploader for multiple videos
-uploaded_files = st.file_uploader(
-    "Upload up to 4 Videos", type=["mp4", "mov", "avi", "mkv"], accept_multiple_files=True
+st.set_page_config(
+    page_title="Advanced Traffic Flow Optimization",
+    layout="wide"
 )
 
-def create_detections(results, labels, model_type="yolov5"):
-    """Convert YOLO detection results to Norfair detections for tracking."""
+st.title("🚦 Advanced Traffic Flow Optimization")
+st.subheader("Intelligent Traffic Monitoring System")
+
+# ---------------------------------------------------
+# LOAD MODEL
+# ---------------------------------------------------
+
+@st.cache_resource
+def load_model():
+    return YOLO("yolov8n.pt")
+
+try:
+    model = load_model()
+except Exception as e:
+    st.error(f"Failed to load model: {e}")
+    st.stop()
+
+# ---------------------------------------------------
+# VEHICLE CLASSES
+# ---------------------------------------------------
+
+VEHICLE_CLASSES = [
+    "car",
+    "bus",
+    "truck",
+    "motorcycle"
+]
+
+# ---------------------------------------------------
+# FILE UPLOADER
+# ---------------------------------------------------
+
+uploaded_files = st.file_uploader(
+    "Upload up to 4 Videos",
+    type=["mp4", "avi", "mov", "mkv"],
+    accept_multiple_files=True
+)
+
+# ---------------------------------------------------
+# DETECTION CONVERTER
+# ---------------------------------------------------
+
+def create_detections(results):
+
     detections = []
-    if model_type == "yolov5":
-        if hasattr(results, 'xyxy'):
-            for result in results.xyxy[0]:
-                if len(result) >= 6:
-                    x1, y1, x2, y2, conf, cls = result[:6]
-                    label = labels[int(cls)]
-                    centroid = np.array([[(x1 + x2) / 2, (y1 + y2) / 2]])
-                    if label in non_emergency_labels:
-                        detections.append(
-                            Detection(
-                                centroid, 
-                                data={"label": label, "conf": conf, "box": (int(x1), int(y1), int(x2), int(y2))}
-                            )
-                        )
+
+    for box in results.boxes:
+
+        cls_id = int(box.cls[0])
+        label = results.names[cls_id]
+
+        if label not in VEHICLE_CLASSES:
+            continue
+
+        x1, y1, x2, y2 = map(int, box.xyxy[0])
+
+        center_x = (x1 + x2) / 2
+        center_y = (y1 + y2) / 2
+
+        detections.append(
+            Detection(
+                points=np.array([[center_x, center_y]]),
+                data={
+                    "label": label,
+                    "box": (x1, y1, x2, y2)
+                }
+            )
+        )
+
     return detections
 
+# ---------------------------------------------------
+# PROCESS VIDEOS
+# ---------------------------------------------------
+
 if uploaded_files:
-    total_clearance_time = 0  # Initialize total clearance time
-    video_results = []  # Store the results for the table
 
-    for idx, uploaded_file in enumerate(uploaded_files[:4]):  # Process up to 4 videos
-        st.write(f"### Processing Video {idx + 1}: {uploaded_file.name}")
-        
-        tfile = tempfile.NamedTemporaryFile(delete=False)
-        tfile.write(uploaded_file.read())
+    total_clearance_time = 0
+    video_results = []
 
-        cap = cv2.VideoCapture(tfile.name)
-        stframe = st.empty()
+    for index, uploaded_file in enumerate(uploaded_files[:4], start=1):
 
-        # Initialize the vehicle ID tracking set
-        unique_non_emergency_ids = set()
+        st.markdown(f"## 🎥 Video {index}: {uploaded_file.name}")
 
-        # Initialize ByteTrack tracker
-        tracker = Tracker(distance_function="euclidean", distance_threshold=30)
+        temp_video = tempfile.NamedTemporaryFile(delete=False)
+        temp_video.write(uploaded_file.read())
 
-        # Process each frame of the video
+        cap = cv2.VideoCapture(temp_video.name)
+
+        frame_placeholder = st.empty()
+
+        tracker = Tracker(
+            distance_function="euclidean",
+            distance_threshold=30
+        )
+
+        unique_vehicle_ids = set()
+
         while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
+
+            success, frame = cap.read()
+
+            if not success:
                 break
 
-            # Run YOLOv5 model for non-emergency vehicle detection
-            non_emergency_results = yolo_v5_non_emergency(frame)
-            
-            # Generate detections from YOLOv5 model
-            detections = create_detections(non_emergency_results, yolo_v5_non_emergency.names, model_type="yolov5")
-            
-            # Update tracked objects
+            results = model(frame)[0]
+
+            detections = create_detections(results)
+
             tracked_objects = tracker.update(detections)
 
-            # Draw bounding boxes on the frame
             for obj in tracked_objects:
+
                 label = obj.last_detection.data["label"]
+
                 x1, y1, x2, y2 = obj.last_detection.data["box"]
 
-                # If it’s a non-emergency vehicle
-                if label in non_emergency_labels:
-                    if obj.id not in unique_non_emergency_ids:
-                        unique_non_emergency_ids.add(obj.id)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(frame, f'{label} {obj.id}', (x1, y1 - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+                unique_vehicle_ids.add(obj.id)
 
-            # Update the frame in Streamlit
-            stframe.image(frame, channels="BGR", use_container_width=True)
+                cv2.rectangle(
+                    frame,
+                    (x1, y1),
+                    (x2, y2),
+                    (0, 255, 0),
+                    2
+                )
+
+                cv2.putText(
+                    frame,
+                    f"{label} ID:{obj.id}",
+                    (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0, 255, 0),
+                    2
+                )
+
+            frame_placeholder.image(
+                frame,
+                channels="BGR",
+                use_container_width=True
+            )
 
         cap.release()
 
-        # Calculate and display road clearance time for this video
-        non_emergency_count = len(unique_non_emergency_ids)
-        # Use the max vehicle count to determine the clearance time
-        clearance_time = non_emergency_count * 3  # Each vehicle requires 3 seconds for clearance
-        total_clearance_time += clearance_time 
+        vehicle_count = len(unique_vehicle_ids)
 
-        video_results.append({
-            "Video Name": uploaded_file.name,
-            "Vehicle Count": non_emergency_count,
-            "Estimated Road Clearance Time (seconds)": clearance_time
-        })
+        clearance_time = vehicle_count * 3
 
-    # Create a DataFrame for displaying the table
-    video_df = pd.DataFrame(video_results)
-    st.write("### Video Detection Summary")
-    st.table(video_df)
+        total_clearance_time += clearance_time
 
-    # Display the total road clearance time for all videos
-    st.write(f"### Total Road Clearance Time for All Videos: {total_clearance_time} seconds")
+        video_results.append(
+            {
+                "Video Name": uploaded_file.name,
+                "Vehicle Count": vehicle_count,
+                "Estimated Clearance Time (Seconds)": clearance_time
+            }
+        )
 
-    # Find the video with the maximum vehicle count
-    max_vehicle_video = video_df.loc[video_df["Vehicle Count"].idxmax()]
-    st.write(f"### Route to Clear: {max_vehicle_video['Video Name']} (Max Vehicle Count: {max_vehicle_video['Vehicle Count']})")
+    # ---------------------------------------------------
+    # SUMMARY TABLE
+    # ---------------------------------------------------
+
+    st.markdown("## 📊 Detection Summary")
+
+    df = pd.DataFrame(video_results)
+
+    st.dataframe(
+        df,
+        use_container_width=True
+    )
+
+    # ---------------------------------------------------
+    # TOTAL CLEARANCE TIME
+    # ---------------------------------------------------
+
+    st.markdown(
+        f"### ⏱️ Total Road Clearance Time: {total_clearance_time} Seconds"
+    )
+
+    # ---------------------------------------------------
+    # MOST CONGESTED ROUTE
+    # ---------------------------------------------------
+
+    busiest_route = df.loc[df["Vehicle Count"].idxmax()]
+
+    st.warning(
+        f"🚨 Route Priority: {busiest_route['Video Name']} "
+        f"(Vehicle Count: {busiest_route['Vehicle Count']})"
+    )
+
