@@ -1,6 +1,6 @@
-import cv2
 import os
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
+import cv2
 import torch
 import tempfile
 from ultralytics import YOLO
