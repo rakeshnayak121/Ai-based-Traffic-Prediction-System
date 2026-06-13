@@ -109,9 +109,9 @@ if uploaded_files:
         frame_placeholder = st.empty()
 
         tracker = Tracker(
-            distance_function="euclidean",
-            distance_threshold=30
-        )
+    distance_function="mean_euclidean",
+    distance_threshold=30
+)
 
         unique_vehicle_ids = set()
 
